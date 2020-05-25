@@ -1,0 +1,435 @@
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template to create Cloud Native Environment for Rocket CX
+Parameters:
+  VPCRDS:
+    Type: List<AWS::EC2::VPC::Id>
+    Description: Name of VPC where RDS resides
+  SG:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Name of Security Group
+  SUB:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Name of Subents
+  ROLEARN1:
+    Type: String
+    Description: ARN for Database Lambdas
+  ROLEARN2:
+    Type: String
+    Description: Role ARN for Cognito Lambdas
+  AuthName:
+    Type: String
+    Description: Unique Auth Name for Cognito Resources
+  DBUser:
+    Description: The database admin account username
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBPassword:
+    Description: The database admin account password
+    Type: String
+    MinLength: 1
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+Resources:
+  MyApi:
+    DependsOn: SM2
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      Cors: '''*'''
+      Auth:
+        DefaultAuthorizer: MyCognitoAuthorizer
+        Authorizers:
+          MyCognitoAuthorizer:
+            UserPoolArn:
+              Fn::GetAtt:
+              - UserPool
+              - Arn
+  RDSPOSTLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: RDS_POST_Lambda_1
+      Handler: Usage_Layer.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: Usage_Layer.zip
+      Role:
+        Ref: ROLEARN1
+      VpcConfig:
+        SecurityGroupIds:
+          Ref: SG
+        SubnetIds:
+          Ref: SUB
+      Environment:
+        Variables:
+          SECRETS_DB:
+            Ref: SM1
+      Events:
+        ApiEventa:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /instance/{instance-id}/usage
+            Method: POST
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  RDSGETLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: Get_request_1
+      Handler: Get.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: Get.zip
+      Role:
+        Ref: ROLEARN1
+      VpcConfig:
+        SecurityGroupIds:
+          Ref: SG
+        SubnetIds:
+          Ref: SUB
+      Environment:
+        Variables:
+          SECRETS_DB:
+            Ref: SM1
+      Events:
+        ApiEventb:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /instance/{instance-id}/usage
+            Method: GET
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  RDSCreateTable:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 20
+      FunctionName: createdb_1
+      Handler: createdb.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: createdb.zip
+      Role:
+        Ref: ROLEARN1
+      VpcConfig:
+        SecurityGroupIds:
+          Ref: SG
+        SubnetIds:
+          Ref: SUB
+      Environment:
+        Variables:
+          SECRETS_DB:
+            Ref: SM1
+  COGNITOusertoken:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: Cog_user_token_1
+      Handler: Cognito-User-Token.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: Cognito-User-Token.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEventc:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/token
+            Method: POST
+            Auth:
+              Authorizer: NONE
+  COGNITOConfirmPass:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: CognitoConfirmForgotPassword_1
+      Handler: CognitoConfirmForgotPassword.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: CognitoConfirmForgotPassword.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEventd:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/confirm-forgot-password
+            Method: POST
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  COGNITOConfirmSignup:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: CognitoConfirmSignup_1
+      Handler: CognitoConfirmSignup.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: CognitoConfirmSignup.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEvente:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/confirm-signup
+            Method: PUT
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  COGNITOforgotpass:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: CognitoForgotPassword_1
+      Handler: CognitoForgotPassword.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: CognitoForgotPassword.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEvente:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/forgot-password
+            Method: POST
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  COGNITOresendcode:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: CognitoResendVerificationCode_1
+      Handler: CognitoResendVerificationCode.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: CognitoResendVerificationCode.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEventq:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/resend-verification-code
+            Method: POST
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  COGNITOPoolsignup:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 5
+      FunctionName: CognitoUserPoolSignUp_1
+      Handler: CognitoUserPoolSignUp.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: CognitoUserPoolSignUp.zip
+      Role:
+        Ref: ROLEARN2
+      Environment:
+        Variables:
+          SECRETS_COG:
+            Ref: SM2
+      Events:
+        ApiEventh:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: MyApi
+            Path: /cognito/signup
+            Method: POST
+            Auth:
+              Authorizer: MyCognitoAuthorizer
+              AuthorizationScopes:
+              - billing-api/create_billing
+  SecretsLam:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.6
+      Timeout: 20
+      FunctionName: test_lambda_cf_1
+      Handler: test.lambda_handler
+      CodeUri:
+        Bucket: samcloudnative6075
+        Key: test.zip
+      Role:
+        Ref: ROLEARN2
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      MasterUsername:
+        Ref: DBUser
+      MasterUserPassword:
+        Ref: DBPassword
+      Engine: MySQL
+      DBInstanceClass: db.t3.small
+      VPCSecurityGroups:
+        Ref: SG
+  SM1:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: MySecretForDB
+      Description: This secret has a hardcoded DB password in SecretString
+      SecretString:
+        Fn::Sub: '{"username":"${DBUser}" ,"password":"${DBPassword}","host":"${MyDB.Endpoint.Address}"}'
+  SM2:
+    DependsOn: SecretCog
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: MySecretForCognito
+      Description: This secret has a hardcoded password in SecretString for Cognito
+        based resources
+      SecretString:
+        Fn::Sub: '{"USER_POOL_ID":"${UserPool}" ,"CLIENT_ID":"${MyApp}","CLIENT_SECRET":"${SecretCog.client_secret}"}'
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName:
+        Fn::Sub: ${AuthName}-user-pool
+      UsernameConfiguration:
+        CaseSensitive: false
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+        - Name: admin_only
+          Priority: 1
+      Schema:
+      - Name: name
+        AttributeDataType: String
+        Mutable: false
+        Required: true
+  MyApp:
+    DependsOn: UserPoolResourceServer
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId:
+        Ref: UserPool
+      AllowedOAuthFlows:
+      - client_credentials
+      GenerateSecret: true
+      PreventUserExistenceErrors: LEGACY
+      CallbackURLs:
+      - http://localhost:3000
+      DefaultRedirectURI: http://localhost:3000
+      LogoutURLs:
+      - http://localhost:3000
+      SupportedIdentityProviders:
+      - COGNITO
+      ExplicitAuthFlows:
+      - ALLOW_ADMIN_USER_PASSWORD_AUTH
+      - ALLOW_CUSTOM_AUTH
+      - ALLOW_USER_SRP_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+      AllowedOAuthScopes:
+      - billing-api/read_billing
+      - billing-api/delete_billing
+      - billing-api/create_billing
+  UserPoolResourceServer:
+    Type: AWS::Cognito::UserPoolResourceServer
+    Properties:
+      UserPoolId:
+        Ref: UserPool
+      Identifier: billing-api
+      Name: billing-api
+      Scopes:
+      - ScopeName: read_billing
+        ScopeDescription: Read Billing
+      - ScopeName: delete_billing
+        ScopeDescription: Delete Billing
+      - ScopeName: create_billing
+        ScopeDescription: Create Billing
+  DomainName:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: api-billing-6075
+      UserPoolId:
+        Ref: UserPool
+  SecretCog:
+    DependsOn:
+    - UserPool
+    - MyApp
+    Type: Custom::CLIENT
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - SecretsLam
+        - Arn
+      PoolId:
+        Ref: UserPool
+      ClientId:
+        Ref: MyApp
+  CreateTable:
+    DependsOn: MyDB
+    Type: Custom::CLIENT
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - RDSCreateTable
+        - Arn
+Outputs:
+  SAMApi:
+    Description: API Gateway endpoint URL for DEV stage for RocketCX Cloud Native
+      function
+    Value:
+      Fn::Sub: https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/

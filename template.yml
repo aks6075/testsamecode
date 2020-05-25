@@ -1,0 +1,26 @@
+Transform: AWS::Serverless-2016-10-31
+
+Description:
+    SAM template to create Cloud Native Environment for Rocket CX
+
+
+
+Resources:
+    Lambda1:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+            Runtime: python3.6
+            Timeout: 5
+            FunctionName: test1
+            Handler: some.lambda_handler
+            CodeUri: lam1/
+
+
+    Lambda2:
+        Type: 'AWS::Serverless::Function'
+        Properties:
+            Runtime: python3.6
+            Timeout: 5
+            FunctionName: test2
+            Handler: lam.lambda_handler
+            CodeUri: lam2/
